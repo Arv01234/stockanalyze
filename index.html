@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticker — Stock Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root{
+    --bg: #07090d;
+    --panel: rgba(255,255,255,0.035);
+    --panel-solid: #12151c;
+    --line: rgba(255,255,255,0.08);
+    --text: #e9edf3;
+    --muted: #8892a0;
+    --accent: #7dd8b8;
+    --accent-2: #8b7bf0;
+    --up: #5fdb9b;
+    --down: #f0716c;
+    --mono: "IBM Plex Mono", Consolas, monospace;
+    --sans: "Space Grotesk", -apple-system, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+    padding:40px 20px 100px; position:relative; overflow-x:hidden;
+  }
+  body::before{
+    content:''; position:fixed; inset:-20%; z-index:-1;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(125,216,184,0.14), transparent 40%),
+      radial-gradient(circle at 85% 25%, rgba(139,123,240,0.14), transparent 45%),
+      radial-gradient(circle at 50% 90%, rgba(125,216,184,0.08), transparent 50%);
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  @keyframes drift{ from{ transform: translate(0,0) scale(1); } to{ transform: translate(-2%, 2%) scale(1.05); } }
+  @keyframes rise{ from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform:none;} }
+
+  .wrap{max-width:780px; margin:0 auto;}
+  header{display:flex; align-items:center; justify-content:space-between; margin-bottom:36px;}
+  .brand{font-weight:700; font-size:20px; letter-spacing:-0.02em;}
+  .brand span{background:linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .tag{font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase;}
+
+  .search{
+    display:flex; gap:10px; margin-bottom:8px; background:var(--panel); border:1px solid var(--line);
+    padding:8px; border-radius:16px; backdrop-filter:blur(20px); box-shadow:0 8px 30px rgba(0,0,0,0.3);
+  }
+  .search input{
+    flex:1; background:transparent; border:none; color:var(--text); padding:14px 16px;
+    font-family:var(--mono); font-size:17px; letter-spacing:1px; text-transform:uppercase;
+  }
+  .search input:focus{outline:none;}
+  .search input::placeholder{color:#4a5261;}
+  .search button{
+    background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#07090d; border:none;
+    padding:0 26px; border-radius:11px; font-weight:600; cursor:pointer; font-family:var(--sans); font-size:14px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .search button:hover:not(:disabled){ transform:translateY(-1px); box-shadow:0 6px 18px rgba(125,216,184,0.25); }
+  .search button:disabled{opacity:0.5; cursor:default;}
+
+  #status{font-family:var(--mono); font-size:13px; color:var(--muted); margin:14px 4px; min-height:18px;}
+  #status.error{color:var(--down);}
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:24px;
+    margin-bottom:18px; backdrop-filter:blur(20px); animation: rise 0.45s ease both;
+  }
+  .price-row{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  .ticker-name{font-size:13px; color:var(--muted);}
+  .price{font-family:var(--mono); font-size:42px; font-weight:600; letter-spacing:-0.01em;}
+  .change{font-family:var(--mono); font-size:14px; padding:4px 10px; border-radius:8px; font-weight:500;}
+  .change.up{color:var(--up); background:rgba(95,219,155,0.12);}
+  .change.down{color:var(--down); background:rgba(240,113,108,0.12);}
+  .source-note{font-family:var(--mono); font-size:11px; color:#5a6272; margin-top:10px;}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px; margin-bottom:18px;}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; backdrop-filter:blur(20px); animation: rise 0.45s ease both;}
+  .stat .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:6px;}
+  .stat .value{font-family:var(--mono); font-size:18px; font-weight:600;}
+
+  .section-title{font-family:var(--mono); font-size:12px; background:linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent; text-transform:uppercase; letter-spacing:2px; margin:28px 0 12px; font-weight:600;}
+  .analysis p{line-height:1.75; margin:0 0 14px; color:var(--text); font-size:15.5px;}
+  .analysis p:last-child{margin-bottom:0; color:var(--muted); font-size:13.5px;}
+
+  .news-item{display:block; text-decoration:none; color:inherit; padding:14px 0; border-bottom:1px solid var(--line);}
+  .news-item:last-child{border-bottom:none; padding-bottom:0;}
+  .news-item:first-child{padding-top:0;}
+  .news-item:hover .news-headline{color:var(--accent);}
+  .news-headline{font-size:15px; font-weight:500; margin-bottom:5px; transition:color 0.15s ease;}
+  .news-meta{font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; gap:8px;}
+
+  .disclaimer{font-size:12px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px; margin-top:24px; line-height:1.6;}
+  .empty{text-align:center; color:var(--muted); padding:80px 20px; font-size:14.5px; line-height:1.8;}
+  .empty code{background:var(--panel-solid); border:1px solid var(--line); padding:3px 8px; border-radius:6px; font-family:var(--mono); color:var(--accent);}
+  .skel{background:linear-gradient(90deg, var(--panel) 25%, rgba(255,255,255,0.06) 50%, var(--panel) 75%); background-size:200% 100%; animation: shimmer 1.4s infinite; border-radius:14px; height:20px;}
+  @keyframes shimmer{ from{background-position:200% 0;} to{background-position:-200% 0;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Ticker<span>.</span></div>
+    <div class="tag">stock analysis</div>
+  </header>
+
+  <div class="search">
+    <input type="text" id="tickerInput" placeholder="AAPL" maxlength="6">
+    <button id="goBtn">Analyze</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (n, d=2) => (n===null||n===undefined||isNaN(n)) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
+const fmtBig = n => {
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  n = Number(n) * 1e6;
+  if(Math.abs(n) >= 1e12) return (n/1e12).toFixed(2)+'T';
+  if(Math.abs(n) >= 1e9) return (n/1e9).toFixed(2)+'B';
+  if(Math.abs(n) >= 1e6) return (n/1e6).toFixed(2)+'M';
+  return fmt(n);
+};
+const timeAgo = (unixSec) => {
+  const diff = Date.now()/1000 - unixSec;
+  if(diff < 3600) return Math.max(1,Math.round(diff/60)) + 'm ago';
+  if(diff < 86400) return Math.round(diff/3600) + 'h ago';
+  return Math.round(diff/86400) + 'd ago';
+};
+
+$('tickerInput').addEventListener('keydown', e => { if(e.key==='Enter') analyze(); });
+$('goBtn').onclick = analyze;
+
+function setStatus(msg, isError=false){
+  const el = $('status');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+async function analyze(){
+  const ticker = $('tickerInput').value.trim().toUpperCase();
+  if(!ticker) return;
+
+  $('goBtn').disabled = true;
+  $('results').innerHTML = `<div class="card"><div class="skel" style="width:60%;margin-bottom:14px;"></div><div class="skel" style="width:40%;height:36px;"></div></div>`;
+  setStatus('Fetching quote, fundamentals, and recent news for ' + ticker + '...');
+
+  try{
+    const res = await fetch('/api/analyze?ticker=' + encodeURIComponent(ticker));
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Something went wrong.');
+
+    setStatus('');
+    render(ticker, data.quote, data.profile, data.metric, data.news);
+  }catch(err){
+    $('results').innerHTML = '';
+    setStatus(err.message || 'Something went wrong.', true);
+  }finally{
+    $('goBtn').disabled = false;
+  }
+}
+
+function buildNarrative(ticker, quote, profile, m){
+  const price = quote.c;
+  const changePct = quote.dp;
+  const pe = m.peTTM ?? m.peBasicExclExtraTTM;
+  const eps = m.epsTTM ?? m.epsBasicExclExtraTTM;
+  const marketCap = profile.marketCapitalization;
+  const divYield = m.dividendYieldIndicatedAnnual;
+  const beta = m.beta;
+  const profitMargin = m.netProfitMarginTTM;
+  const high52 = m['52WeekHigh'];
+  const low52 = m['52WeekLow'];
+  const ret13w = m['13WeekPriceReturnDaily'];
+  const ret26w = m['26WeekPriceReturnDaily'];
+  const retYtd = m['yearToDatePriceReturnDaily'];
+  const industry = profile.finnhubIndustry || 'this industry';
+  const name = profile.name || ticker;
+
+  const paras = [];
+  let dir = changePct >= 0 ? 'up' : 'down';
+  paras.push(`${name} (${ticker}) is trading at $${fmt(price)}, ${dir} ${fmt(Math.abs(changePct))}% on the day. It operates in the ${industry.toLowerCase()} industry with a market capitalization of $${fmtBig(marketCap)}.`);
+
+  if(pe !== undefined && pe > 0){
+    let peComment;
+    if(pe < 15) peComment = 'trades at a relatively low earnings multiple, which can reflect either an undervalued stock or market skepticism about future growth';
+    else if(pe < 25) peComment = 'trades at a moderate earnings multiple, roughly in line with a typical established company';
+    else if(pe < 40) peComment = 'trades at an elevated earnings multiple, implying investors expect above-average growth';
+    else peComment = 'trades at a very high earnings multiple, meaning the stock price is pricing in substantial future growth — a risk if results disappoint';
+    paras.push(`With a P/E ratio of ${fmt(pe)}${eps!==undefined ? ` and trailing EPS of $${fmt(eps)}` : ''}, the stock ${peComment}.`);
+  } else {
+    paras.push(`No meaningful P/E ratio is available, which is common for unprofitable or newly public companies — earnings-based valuation isn't reliable here.`);
+  }
+
+  if(high52 !== undefined && low52 !== undefined){
+    const posInRange = (((price - low52) / (high52 - low52)) * 100).toFixed(0);
+    let momentumParts = [];
+    if(ret13w !== undefined) momentumParts.push(`${ret13w>=0?'up':'down'} ${fmt(Math.abs(ret13w))}% over 3 months`);
+    if(ret26w !== undefined) momentumParts.push(`${ret26w>=0?'up':'down'} ${fmt(Math.abs(ret26w))}% over 6 months`);
+    if(retYtd !== undefined) momentumParts.push(`${retYtd>=0?'up':'down'} ${fmt(Math.abs(retYtd))}% year-to-date`);
+    paras.push(`The 52-week range is $${fmt(low52)}–$${fmt(high52)}, and the current price sits ${posInRange}% of the way through that range. ${momentumParts.length ? 'Momentum: ' + momentumParts.join(', ') + '.' : ''}`);
+  }
+
+  if(profitMargin !== undefined || beta !== undefined || divYield !== undefined){
+    let marginComment = profitMargin === undefined ? '' : (profitMargin > 15 ? 'a healthy profit margin' : (profitMargin > 0 ? 'a thin but positive profit margin' : 'negative margins, meaning the company is currently unprofitable'));
+    paras.push(`${marginComment ? `The company reports ${marginComment} of ${fmt(profitMargin)}%. ` : ''}${beta!==undefined ? `Its beta of ${fmt(beta)} indicates the stock is ${beta>1.2?'more volatile than':beta<0.8?'less volatile than':'roughly as volatile as'} the broader market. ` : ''}${divYield!==undefined && divYield>0 ? `It pays a dividend yield of ${fmt(divYield)}%.` : 'It does not currently pay a meaningful dividend.'}`);
+  }
+
+  paras.push(`This summary is generated entirely from the numbers shown above — it does not incorporate outside opinions or predictions about where the price will go next.`);
+  return paras;
+}
+
+function render(ticker, quote, profile, m, news){
+  const price = quote.c;
+  const change = quote.d;
+  const changePct = quote.dp;
+  const isUp = change >= 0;
+  const paras = buildNarrative(ticker, quote, profile, m);
+
+  const newsHtml = (news && news.length)
+    ? news.map(n => `
+        <a class="news-item" href="${n.url}" target="_blank" rel="noopener">
+          <div class="news-headline">${escapeHtml(n.headline)}</div>
+          <div class="news-meta"><span>${escapeHtml(n.source)}</span><span>·</span><span>${timeAgo(n.datetime)}</span></div>
+        </a>`).join('')
+    : `<div style="color:var(--muted); font-size:14px;">No recent news found for this ticker in the last week.</div>`;
+
+  const html = `
+    <div class="card">
+      <div class="price-row">
+        <div>
+          <div class="ticker-name">${profile.name || ticker} · ${profile.exchange || ''}</div>
+          <div class="price">$${fmt(price)}</div>
+        </div>
+        <div class="change ${isUp?'up':'down'}">${isUp?'▲':'▼'} ${fmt(Math.abs(change))} (${fmt(Math.abs(changePct))}%)</div>
+      </div>
+      <div class="source-note">Live quote · source: Finnhub</div>
+    </div>
+
+    <div class="grid">
+      <div class="stat"><div class="label">P/E ratio</div><div class="value">${fmt(m.peTTM ?? m.peBasicExclExtraTTM)}</div></div>
+      <div class="stat"><div class="label">EPS (TTM)</div><div class="value">$${fmt(m.epsTTM ?? m.epsBasicExclExtraTTM)}</div></div>
+      <div class="stat"><div class="label">Market cap</div><div class="value">$${fmtBig(profile.marketCapitalization)}</div></div>
+      <div class="stat"><div class="label">52w high</div><div class="value">$${fmt(m['52WeekHigh'])}</div></div>
+      <div class="stat"><div class="label">52w low</div><div class="value">$${fmt(m['52WeekLow'])}</div></div>
+      <div class="stat"><div class="label">Beta</div><div class="value">${fmt(m.beta)}</div></div>
+      <div class="stat"><div class="label">Div. yield</div><div class="value">${m.dividendYieldIndicatedAnnual ? fmt(m.dividendYieldIndicatedAnnual)+'%' : '—'}</div></div>
+      <div class="stat"><div class="label">YTD return</div><div class="value">${m.yearToDatePriceReturnDaily!==undefined ? fmt(m.yearToDatePriceReturnDaily)+'%' : '—'}</div></div>
+    </div>
+
+    <div class="section-title">Analysis</div>
+    <div class="card analysis">${paras.map(p => `<p>${p}</p>`).join('')}</div>
+
+    <div class="section-title">Recent news</div>
+    <div class="card">${newsHtml}</div>
+
+    <div class="disclaimer">
+      Analysis text is generated from the live data above using fixed rules — no AI-generated numbers or predictions.
+      For informational purposes only, not financial advice. Data and headlines sourced from Finnhub.
+    </div>
+  `;
+  $('results').innerHTML = html;
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+$('results').innerHTML = `<div class="empty">Enter a ticker symbol above — e.g. <code>AAPL</code>, <code>TSLA</code>, <code>MSFT</code> — to generate a full analysis.</div>`;
+</script>
+</body>
+</html>
